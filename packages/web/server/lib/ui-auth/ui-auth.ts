@@ -50,6 +50,10 @@ interface AuthInput extends ClientInput {
   scope?: unknown;
 }
 
+interface UrlAuthTokenOptions {
+  sessionToken?: string;
+}
+
 interface UrlAuthScope {
   kind: 'guest';
   id: string;
@@ -662,10 +666,14 @@ export const createUiAuth = ({
       handleSessionCreate: (_req: Request, res: Response) => {
         res.status(400).json({ error: 'UI password not configured' });
       },
-      handleUrlAuthToken: async (req: Request, res: Response) => {
+      handleUrlAuthToken: async (req: Request, res: Response, { sessionToken: trustedSessionToken }: UrlAuthTokenOptions = {}) => {
         const scope = readRequestedUrlAuthScope(req);
         if (scope === undefined) {
           return res.status(400).json({ error: 'Unknown URL token scope' });
+        }
+        if (trustedSessionToken) {
+          res.setHeader('Cache-Control', 'no-store');
+          return res.json(issueUrlAuthTokenForSession(trustedSessionToken, scope));
         }
         const clientAuth = await authenticateClientRequest(req, { allowUrlToken: false });
         if (clientAuth) {
@@ -902,10 +910,14 @@ export const createUiAuth = ({
     return clientAuth ? clientAuthContext(clientAuth) : null;
   };
 
-  const handleUrlAuthToken = async (req: Request, res: Response) => {
+  const handleUrlAuthToken = async (req: Request, res: Response, { sessionToken: trustedSessionToken }: UrlAuthTokenOptions = {}) => {
     const scope = readRequestedUrlAuthScope(req);
     if (scope === undefined) {
       return res.status(400).json({ error: 'Unknown URL token scope' });
+    }
+    if (trustedSessionToken) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(issueUrlAuthTokenForSession(trustedSessionToken, scope));
     }
     const sessionToken = await resolveAuthenticatedSessionToken(req, { allowUrlToken: false });
     if (!sessionToken) {

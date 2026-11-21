@@ -756,6 +756,18 @@ export const registerAuthAndAccessRoutes = (app: Application, dependencies: Auth
 
   app.post('/auth/url-token', async (req, res, next) => {
     try {
+      const requestScope = tunnelAuthController.classifyRequestScope(req);
+      if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+        // A browser in tunnel scope holds only the tunnel session cookie, so the
+        // URL token is keyed on that session instead of a UI session.
+        const tunnelSession = tunnelAuthController.getTunnelSessionFromRequest(req);
+        if (!tunnelSession) {
+          tunnelAuthController.clearTunnelSessionCookie(req, res);
+          return res.status(401).json({ error: 'Tunnel authentication required', locked: true, tunnelLocked: true });
+        }
+        await uiAuthController.handleUrlAuthToken(req, res, { sessionToken: `tunnel:${tunnelSession.sessionId}` });
+        return;
+      }
       await uiAuthController.handleUrlAuthToken(req, res);
     } catch (error) {
       next(error);

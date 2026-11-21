@@ -1196,6 +1196,46 @@ describe('client auth routes', () => {
     expect(dependencies.uiAuthController.handlePasskeyStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('mints a URL token for a browser that holds only a tunnel session', async () => {
+    const dependencies = createDependencies();
+    const tunnelAuthController = createTunnelAuth();
+    tunnelAuthController.setActiveTunnel({ tunnelId: 'tunnel-1', publicUrl: 'https://tunnel.example.com' });
+    const uiAuthController = createUiAuth({ password: 'secret' });
+    dependencies.tunnelAuthController = tunnelAuthController;
+    dependencies.uiAuthController = uiAuthController;
+    const app = express();
+    registerAuthAndAccessRoutes(app, dependencies);
+
+    try {
+      const bootstrap = tunnelAuthController.issueBootstrapToken({ ttlMs: 10_000 });
+      const connect = { setHeader: vi.fn() };
+      expect(tunnelAuthController.exchangeBootstrapToken({
+        req: { headers: { host: 'tunnel.example.com' }, hostname: 'tunnel.example.com', ip: '203.0.113.10', socket: { remoteAddress: '203.0.113.10' } },
+        res: connect,
+        token: bootstrap.token,
+        sessionTtlMs: 60_000,
+      }).ok).toBe(true);
+      const tunnelCookie = connect.setHeader.mock.calls[0][1].split(';')[0];
+
+      const minted = await request(app).post('/auth/url-token').set('Host', 'tunnel.example.com').set('Cookie', tunnelCookie).send({});
+      expect(minted.status).toBe(200);
+      expect(minted.body.token.startsWith('oc_url_')).toBe(true);
+      expect(await uiAuthController.ensureSessionToken({
+        method: 'GET',
+        path: '/api/terminal/abc/input/ws',
+        url: `/api/terminal/abc/input/ws?oc_url_token=${encodeURIComponent(minted.body.token)}`,
+        headers: { upgrade: 'websocket' },
+      }, null)).toMatch(/^url:|^tunnel:/);
+
+      // No tunnel session, no token.
+      await request(app).post('/auth/url-token').set('Host', 'tunnel.example.com').send({}).expect(401);
+      // A password-less UI cookie is not a tunnel session either.
+      await request(app).post('/auth/url-token').set('Host', 'tunnel.example.com').set('Cookie', 'oc_ui_session=abc').send({}).expect(401);
+    } finally {
+      uiAuthController.dispose();
+    }
+  });
+
   it('does not trust a local Host header that a tunnel forwarded for a remote client', () => {
     const tunnelAuthController = createTunnelAuth();
     tunnelAuthController.setActiveTunnel({ tunnelId: 'tunnel-1', publicUrl: 'https://box.tail1234.ts.net' });
