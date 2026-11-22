@@ -77,7 +77,8 @@ const isPathWithinRoot = (path: string, root: string): boolean => {
 
   const comparableRoot = toComparablePath(normalizedRoot);
   const comparablePath = toComparablePath(normalizedPath);
-  return comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`);
+  const comparablePrefix = comparableRoot.endsWith('/') ? comparableRoot : `${comparableRoot}/`;
+  return comparablePath === comparableRoot || comparablePath.startsWith(comparablePrefix);
 };
 
 const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {
