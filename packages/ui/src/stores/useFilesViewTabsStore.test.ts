@@ -18,6 +18,25 @@ describe('useFilesViewTabsStore', () => {
     expect(useFilesViewTabsStore.getState().byRoot).toEqual({});
   });
 
+  test('keeps files under a Unix root directory', () => {
+    const store = useFilesViewTabsStore.getState();
+
+    store.addOpenPath('/', '/home/a.txt');
+    store.setSelectedPath('/', '/home/a.txt');
+    store.expandPath('/', '/home');
+
+    const state = useFilesViewTabsStore.getState().byRoot['/'];
+    expect(state?.openPaths).toEqual(['/home/a.txt']);
+    expect(state?.selectedPath).toBe('/home/a.txt');
+    expect(state?.expandedPaths).toEqual(['/home']);
+  });
+
+  test('ignores a sibling of the root by name prefix', () => {
+    useFilesViewTabsStore.getState().addOpenPath('/home', '/homex/a.txt');
+
+    expect(useFilesViewTabsStore.getState().byRoot).toEqual({});
+  });
+
   test('selects an outside path only when allowOutsideRoot is set', () => {
     const root = '/repo';
     const store = useFilesViewTabsStore.getState();

@@ -46,4 +46,17 @@ describe('useFilesViewTabsStore Windows paths', () => {
     expect(rootState?.openPaths).toEqual(['C:/Repo/other.ts', 'C:/Repo/src/a.ts']);
     expect(rootState?.selectedPath).toBe('C:/Repo/src/a.ts');
   });
+
+  test('keeps files under a drive root directory', () => {
+    const store = useFilesViewTabsStore.getState();
+
+    store.addOpenPath('C:/', 'C:/x/a.ts');
+    store.setSelectedPath('C:/', 'C:/x/a.ts');
+    store.expandPath('C:/', 'C:/x');
+
+    const state = useFilesViewTabsStore.getState().byRoot['C:/'];
+    expect(state?.openPaths).toEqual(['C:/x/a.ts']);
+    expect(state?.selectedPath).toBe('C:/x/a.ts');
+    expect(state?.expandedPaths).toEqual(['C:/x']);
+  });
 });
